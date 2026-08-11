@@ -2,13 +2,14 @@ import os
 import sys
 import logging
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 import uvicorn
 
-# --- NEW: Import Rate Limiting modules ---
+# Import Rate Limiting modules
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -24,22 +25,44 @@ logger = logging.getLogger("ask_my_docs_api")
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.ui.app import initialize_backend
 
-# --- NEW: Initialize the Rate Limiter ---
-# get_remote_address uses the user's IP address to track their request count
+# Initialize the Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# --- 2. Initialize the FastAPI application ---
+# --- 2. Define the Application Lifespan ---
+# A global dictionary to hold our heavy AI models in memory
+ml_models = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # STARTUP: This runs ONLY when the server officially boots, not during simple imports (like our CI smoke test).
+    logger.info("Starting API Server and loading RAG backend...")
+    try:
+        # Load the RAG chain and store it in our global dictionary
+        ml_models["rag_chain"] = initialize_backend()
+        logger.info("RAG backend successfully initialized.")
+    except Exception as e:
+        logger.error(f"Failed to load backend (This is expected in CI environments without a DB): {e}")
+    
+    yield # The server runs and handles user requests here
+    
+    # SHUTDOWN: This runs when the server is turned off.
+    logger.info("Shutting down API Server and clearing memory...")
+    ml_models.clear()
+
+# --- 3. Initialize the FastAPI application ---
+# We attach our lifespan function here!
 app = FastAPI(
     title="Ask My Docs API",
     description="A production RAG API for Environmental Policy Q&A",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
-# --- NEW: Register the Rate Limiter with FastAPI ---
+# Register the Rate Limiter
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# --- 3. Security: CORS Configuration ---
+# --- 4. Security: CORS Configuration ---
 origins = [
     "http://localhost:3000",
     "http://localhost:8501", 
@@ -52,17 +75,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 4. Security: API Key Authentication ---
+# --- 5. Security: API Key Authentication ---
 VALID_API_KEY = "ak-ask-my-docs-prod-777"
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def get_api_key(api_key_header: str = Security(api_key_header)):
     if api_key_header != VALID_API_KEY:
-        logger.warning(f"Unauthorized access attempt rejected.")
+        logger.warning("Unauthorized access attempt rejected.")
         raise HTTPException(status_code=403, detail="Forbidden: Invalid or missing API Key")
     return api_key_header
 
-# --- 5. Middleware for Request Timing ---
+# --- 6. Middleware for Request Timing ---
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
@@ -71,7 +94,7 @@ async def log_requests(request: Request, call_next):
     logger.info(f"Path: {request.url.path} | Method: {request.method} | Status: {response.status_code} | Latency: {process_time:.4f}s")
     return response
 
-# --- 6. Define our Data Models (Pydantic) ---
+# --- 7. Define our Data Models (Pydantic) ---
 class QueryRequest(BaseModel):
     question: str
 
@@ -82,21 +105,19 @@ class QueryResponse(BaseModel):
     answer: str
     sources: list[SourceMetadata]
 
-# --- 7. Load the RAG Pipeline ---
-logger.info("Starting API Server and loading RAG backend...")
-try:
-    rag_chain = initialize_backend()
-    logger.info("RAG backend successfully initialized.")
-except Exception as e:
-    logger.critical(f"CRITICAL ERROR: Failed to load backend. {e}")
-    sys.exit(1)
-
 # --- 8. Define the API Endpoint ---
 @app.post("/api/v1/ask", response_model=QueryResponse)
-@limiter.limit("2/minute") # <-- NEW: The user can only ask 2 questions per minute!
+@limiter.limit("2/minute")
 async def ask_question(request: Request, query: QueryRequest, api_key: str = Depends(get_api_key)):
     logger.info(f"Received query: '{query.question}' from authorized client.")
+    
+    # Check if the AI model was successfully loaded during startup
+    if "rag_chain" not in ml_models:
+        raise HTTPException(status_code=503, detail="Service Unavailable: AI Backend is offline.")
+
     try:
+        # Retrieve the chain from our global dictionary
+        rag_chain = ml_models["rag_chain"]
         response = rag_chain.invoke({"input": query.question})
         
         cited_sources = [SourceMetadata(page=doc.metadata.get("page", "Unknown")) for doc in response["context"]]
