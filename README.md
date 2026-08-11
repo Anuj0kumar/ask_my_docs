@@ -402,6 +402,5 @@ Future improvement:
 **Anuj Kumar Kushwaha**
 
 Built as a hands-on exercise in mastering the **entire Software Development Life Cycle (SDLC)** — from **Data Engineering** and **Retrieval-Augmented Generation (RAG)** to **Backend Engineering**, **Security**, **Docker**, and **CI/CD**.
-````
 
-This version is fully formatted for GitHub with proper headings, code fences, architecture diagrams, roadmap sections, ADRs, and a professional README structure.
+
