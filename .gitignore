@@ -1,0 +1,16 @@
+# Environments
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Secrets (NEVER UPLOAD THESE!)
+.env
+
+# Databases
+data/chroma_db/
+
+# OS Files
+.DS_Store

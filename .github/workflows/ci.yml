@@ -1,0 +1,47 @@
+name: Ask My Docs CI Pipeline
+
+# 1. Triggers: When should this pipeline run?
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# 2. Jobs: What should the pipeline do?
+jobs:
+  build-and-verify:
+    # GitHub provides a free, temporary Linux server to run this job
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step A: Download our code onto the temporary server
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # Step B: Install the exact version of Python we used locally
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip' # Caches dependencies to make future runs faster
+
+    # Step C: Verify that our requirements.txt is valid and installable
+    - name: Verify Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Step D: Attempt to build the Docker container
+    # If the Dockerfile has a syntax error, or the app is broken, this step fails.
+    - name: Build Docker Image
+      run: |
+        docker build -t ask-my-docs-api:test .
+        
+    - name: CI Complete Notification
+      run: echo "Code successfully built and dockerized!"
+
+    # Step E: The Smoke Test
+    # Run a quick check inside the newly built container to ensure the Python code compiles and all imports resolve.
+    - name: Run Smoke Test
+      run: |
+        docker run --rm ask-my-docs-api:test python -c "from src.api import app; print('App successfully loaded in container!')"

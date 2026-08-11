@@ -1,0 +1,12 @@
+[
+  {
+    "question": "How much did global surface temperature increase above 1850–1900 during 2011–2020?",
+    "ground_truth": "Global surface temperature reached approximately 1.1°C above 1850–1900 levels during 2011–2020."
+  },
+  {
+    "question": "What does the report identify as the primary cause of the observed global warming?",
+    "ground_truth": "Human activities, principally through greenhouse gas emissions, have unequivocally caused global warming. Warming from greenhouse gases, dominated by CO2 and methane, is partly masked by aerosol cooling."
+  }
+
+  
+]

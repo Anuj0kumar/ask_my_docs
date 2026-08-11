@@ -1,0 +1,28 @@
+# --- Document Ingestion & Splitting ---
+langchain
+langchain-community
+langchain-text-splitters
+PyMuPDF
+
+# --- Vector Database & Embeddings ---
+chromadb
+langchain-ollama
+
+# --- Advanced Retrieval (Hybrid & Reranking) ---
+rank_bm25
+sentence-transformers
+
+# --- User Interface ---
+streamlit
+
+# --- Testing & Evaluation ---
+ragas
+datasets
+pandas
+
+# --- Production REST API ---
+fastapi
+uvicorn
+pydantic
+
+slowapi
