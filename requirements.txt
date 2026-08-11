@@ -1,5 +1,6 @@
 # --- Document Ingestion & Splitting ---
 langchain
+langchain_chroma
 langchain-community
 langchain-text-splitters
 PyMuPDF
